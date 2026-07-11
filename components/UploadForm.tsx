@@ -6,7 +6,7 @@ import { Controller, useForm, type Control } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Image as ImageIcon, Upload, X, type LucideIcon } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn, parsePDFFile } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import {
   Field,
@@ -19,6 +19,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import LoadingOverlay from '@/components/LoadingOverlay'
 import { DEFAULT_VOICE, voiceCategories, voiceOptions } from '@/lib/constants'
 import { uploadFormSchema, type UploadFormValues } from '@/lib/validations'
+import { useAuth } from '@clerk/nextjs'
+import { toast } from 'sonner';
+import { checkBookExists, createBook, saveBookSegemnts } from '@/lib/actions/book.actions'
+import { upload } from '@vercel/blob/client'
 
 type FormValues = UploadFormValues
 
@@ -80,7 +84,7 @@ function VoiceSelector({ control, error }: { control: Control<FormValues>; error
     <FieldSet>
       <FieldLegend className="form-label">Choose Assistant Voice</FieldLegend>
       <Controller
-        name="voice"
+        name="persona"
         control={control}
         render={({ field }) => (
           <RadioGroup value={field.value} onValueChange={field.onChange} className="space-y-4">
@@ -125,34 +129,116 @@ function VoiceSelector({ control, error }: { control: Control<FormValues>; error
 const UploadForm = () => {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const { userId } = useAuth();
 
   const {
     control,
     register,
     handleSubmit,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(uploadFormSchema),
     defaultValues: {
       title: '',
       author: '',
-      voice: DEFAULT_VOICE,
+      persona: DEFAULT_VOICE,
+      pdfFile: undefined,
+      coverImage: undefined,
     },
   })
 
-  const onSubmit = async (values: FormValues) => {
+  const onSubmit = async (data: FormValues) => {
+
+    if (!userId) {
+      return toast.error("Please login to upload books")
+    }
     setIsSubmitting(true)
+
+    //PostHog->Track book uploads
+
     try {
-      const formData = new FormData()
-      formData.append('pdfFile', values.pdfFile)
-      if (values.coverImage) formData.append('coverImage', values.coverImage)
-      formData.append('title', values.title)
-      formData.append('author', values.author)
-      formData.append('voice', values.voice)
+      const existsCheck = await checkBookExists(data.title);
+      if (existsCheck.exists && existsCheck.book) {
+        toast.info("Book with same title already exists.");
+        reset();
+        router.push(`/books/${existsCheck.book.slug}`);
+        return;
+      }
 
-      await new Promise((resolve) => setTimeout(resolve, 2500))
+      const fileTitle = data.title.replace(/\s+/g, '-').toLowerCase();
+      const pdfFile = data.pdfFile;
 
-      router.push('/')
+      const parsedPDF = await parsePDFFile(pdfFile);
+
+      if (parsedPDF.content.length === 0) {
+        toast.error("Failed to parse PDF,Please try again with different file.");
+        return;
+      }
+
+      const uploadedPdfBlob = await upload(fileTitle, pdfFile, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+        contentType: 'application/pdf'
+      });
+
+      let coverUrl: string;
+
+      if (data.coverImage) {
+        const coverFile = data.coverImage;
+        const uploadedCoverBlob = await upload(`${fileTitle}_cover.png`, coverFile, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          contentType: coverFile.type
+        });
+
+        coverUrl = uploadedCoverBlob.url;
+      } else {
+        const response = await fetch(parsedPDF.cover)
+        const blob = await response.blob();
+
+        const uploadedCoverBlob = await upload(`${fileTitle}_cover.png`, blob, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          contentType: 'image/png'
+        });
+
+        coverUrl = uploadedCoverBlob.url
+      }
+
+      const book = await createBook({
+        clerkId: userId,
+        title: data.title,
+        author: data.author,
+        persona: data.persona,
+        fileURL: uploadedPdfBlob.url,
+        fileBlobKey: uploadedPdfBlob.pathname,
+        coverURL: coverUrl,
+        fileSize: pdfFile.size
+      });
+
+      if (!book.success) throw new Error("Failed to craete a book");
+
+      if (book.alreadyExists) {
+        toast.info("Book with same title already exists.");
+        reset();
+        router.push(`/books/${book.data.slug}`);
+        return;
+      }
+
+      const segments = await saveBookSegemnts(book.data._id, userId, parsedPDF.content);
+
+      if (!segments.success) {
+        toast.error("Failed to save segements")
+        throw new Error("Failed to save book segments");
+      }
+
+      reset();
+      router.push(`/books/${book.data.slug}`);
+    } catch (e) {
+      console.error(e);
+
+      toast.error("Failed to upload book,Please try again later.");
     } finally {
       setIsSubmitting(false)
     }
@@ -213,7 +299,7 @@ const UploadForm = () => {
           <FieldError errors={[errors.author]} />
         </Field>
 
-        <VoiceSelector control={control} error={errors.voice} />
+        <VoiceSelector control={control} error={errors.persona} />
 
         <button type="submit" className="form-btn" disabled={isSubmitting}>
           Begin Synthesis
