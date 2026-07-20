@@ -1,12 +1,13 @@
 import BookCard from '@/components/BookCard'
 import LibraryHero from '@/components/LibraryHero'
 import { getAllBooks } from '@/lib/actions/book.actions'
+export const dynamic='force-dynamic';
 
 const Page = async () => {
 
   const bookResults= await getAllBooks();
-  
   const books=bookResults.success ? bookResults.data??[]:[] 
+  
   return (
     <div className="wrapper container">
       <LibraryHero />
