@@ -1,7 +1,6 @@
 import BookCard from '@/components/BookCard'
 import LibraryHero from '@/components/LibraryHero'
 import { getAllBooks } from '@/lib/actions/book.actions'
-import { sampleBooks } from '@/lib/constants'
 
 const Page = async () => {
 
