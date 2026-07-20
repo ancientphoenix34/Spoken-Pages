@@ -5,8 +5,6 @@ import { connectToDatabase } from "@/database/mongoose";
 import { generateSlug, serializeData } from "../utils";
 import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/bookSegment.model";
-import { success } from "zod";
-
 
 export const checkBookExists = async (title: string) => {
     try {

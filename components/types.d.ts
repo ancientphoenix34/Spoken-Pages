@@ -113,3 +113,24 @@ export interface FileUploadFieldProps<T extends FieldValues> {
     placeholder: string;
     hint: string;
 }
+
+interface SessionCheckResult {
+    allowed: boolean;
+    currentCount: number;
+    limit: number;
+    plan: PlanType;
+    maxDurationMinutes: number;
+    error?: string;
+}
+
+interface StartSessionResult {
+    success: boolean;
+    sessionId?: string;
+    maxDurationMinutes?: number;
+    error?: string;
+}
+
+interface EndSessionResult {
+    success: boolean;
+    error?: string;
+}
