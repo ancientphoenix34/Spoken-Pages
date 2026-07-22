@@ -114,6 +114,19 @@ export interface FileUploadFieldProps<T extends FieldValues> {
     hint: string;
 }
 
+// ============================================
+// SUBSCRIPTION / BILLING TYPES
+// ============================================
+
+export type PlanType = 'free' | 'standard' | 'pro';
+
+export interface PlanLimits {
+    maxBooks: number;
+    monthlySessionLimit: number | null; // null = unlimited
+    maxSessionMinutes: number;
+    sessionHistory: boolean;
+}
+
 export interface SessionCheckResult {
     allowed: boolean;
     currentCount: number;
@@ -132,5 +145,13 @@ export interface StartSessionResult {
 
 export interface EndSessionResult {
     success: boolean;
+    error?: string;
+}
+
+export interface BookLimitCheckResult {
+    allowed: boolean;
+    currentCount: number;
+    limit: number;
+    plan: PlanType;
     error?: string;
 }

@@ -21,7 +21,7 @@ import { DEFAULT_VOICE, voiceCategories, voiceOptions } from '@/lib/constants'
 import { uploadFormSchema, type UploadFormValues } from '@/lib/validations'
 import { useAuth } from '@clerk/nextjs'
 import { toast } from 'sonner';
-import { checkBookExists, createBook, saveBookSegemnts } from '@/lib/actions/book.actions'
+import { checkBookExists, checkBookLimit, createBook, saveBookSegemnts } from '@/lib/actions/book.actions'
 import { upload } from '@vercel/blob/client'
 
 type FormValues = UploadFormValues
@@ -148,6 +148,15 @@ const UploadForm = () => {
     },
   })
 
+  const showUpgradeToast = (message: string) => {
+    toast.error(message, {
+      action: {
+        label: 'Upgrade Plan',
+        onClick: () => router.push('/subscriptions'),
+      },
+    })
+  }
+
   const onSubmit = async (data: FormValues) => {
 
     if (!userId) {
@@ -163,6 +172,13 @@ const UploadForm = () => {
         toast.info("Book with same title already exists.");
         reset();
         router.push(`/books/${existsCheck.book.slug}`);
+        return;
+      }
+
+      const limitCheck = await checkBookLimit(userId);
+      if (!limitCheck.allowed) {
+        showUpgradeToast(limitCheck.error
+          || `You've reached your ${limitCheck.plan} plan limit of ${limitCheck.limit} book${limitCheck.limit === 1 ? '' : 's'}. Upgrade your plan to add more.`);
         return;
       }
 
@@ -217,7 +233,16 @@ const UploadForm = () => {
         fileSize: pdfFile.size
       });
 
-      if (!book.success) throw new Error("Failed to craete a book");
+      if (!book.success) {
+        if (book.limitReached) {
+          showUpgradeToast(typeof book.error === 'string'
+            ? book.error
+            : "You've reached your plan's book limit. Upgrade your plan to add more.");
+        } else {
+          toast.error(typeof book.error === 'string' ? book.error : "Failed to upload book, please try again later.");
+        }
+        return;
+      }
 
       if (book.alreadyExists) {
         toast.info("Book with same title already exists.");

@@ -1,20 +1,45 @@
 'use client'
 
-import useVapi from '@/hooks/useVapi'
-import { Mic, MicOff } from 'lucide-react'
+import useVapi, { CallStatus } from '@/hooks/useVapi'
+import { AlertTriangle, Mic, MicOff, X } from 'lucide-react'
 import { IBook } from './types';
 import Image from 'next/image'
-import { getVoice } from '@/lib/utils'
+import { formatDuration, getVoice } from '@/lib/utils'
 import Transcript from './Transcript'
 
+const STATUS_DISPLAY: Record<CallStatus, { label: string; dotClass: string }> = {
+    idle: { label: 'Ready', dotClass: 'vapi-status-dot-ready' },
+    connecting: { label: 'Connecting…', dotClass: 'vapi-status-dot-connecting' },
+    starting: { label: 'Starting…', dotClass: 'vapi-status-dot-starting' },
+    listening: { label: 'Listening…', dotClass: 'vapi-status-dot-listening' },
+    thinking: { label: 'Thinking…', dotClass: 'vapi-status-dot-thinking' },
+    speaking: { label: 'Speaking…', dotClass: 'vapi-status-dot-speaking' },
+};
 
 const VapiControls = ({ book }: { book: IBook }) => {
 
     const voice = getVoice(book.persona)
     const { status, isActive, messages, currentMessage, currentUserMessage, duration,
-        start, stop, clearError } = useVapi(book);
+        maxDurationSeconds, start, stop, limitError, clearError } = useVapi(book);
+    const statusDisplay = STATUS_DISPLAY[status];
     return (
         <>
+            {limitError && (
+                <div className="warning-banner w-full">
+                    <div className="warning-banner-content">
+                        <AlertTriangle className="warning-banner-icon shrink-0" />
+                        <span className="warning-banner-text flex-1">{limitError}</span>
+                        <button
+                            onClick={clearError}
+                            aria-label="Dismiss"
+                            className="text-[var(--accent-warm)] hover:opacity-70 transition-opacity cursor-pointer shrink-0"
+                        >
+                            <X className="size-4" />
+                        </button>
+                    </div>
+                </div>
+            )}
+
             <div className="vapi-header-card w-full">
                 <div className="vapi-cover-wrapper">
                     <Image
@@ -53,14 +78,16 @@ const VapiControls = ({ book }: { book: IBook }) => {
 
                     <div className="flex flex-wrap gap-3">
                         <div className="vapi-status-indicator">
-                            <span className="vapi-status-dot vapi-status-dot-ready" />
-                            <span className="vapi-status-text">Ready</span>
+                            <span className={`vapi-status-dot ${statusDisplay.dotClass}`} />
+                            <span className="vapi-status-text">{statusDisplay.label}</span>
                         </div>
                         <div className="vapi-status-indicator">
                             <span className="vapi-status-text">Voice: {voice.name}</span>
                         </div>
                         <div className="vapi-status-indicator">
-                            <span className="vapi-status-text">0:00/15:00</span>
+                            <span className="vapi-status-text">
+                                {formatDuration(duration)}/{formatDuration(maxDurationSeconds)}
+                            </span>
                         </div>
                     </div>
                 </div>
