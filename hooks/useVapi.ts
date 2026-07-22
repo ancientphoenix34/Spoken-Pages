@@ -3,11 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Vapi from '@vapi-ai/web';
 import { useAuth } from '@clerk/nextjs';
+import { useRouter } from 'next/navigation';
 
 import { ASSISTANT_ID, DEFAULT_VOICE, VOICE_SETTINGS } from '@/lib/constants';
 import { getVoice } from '@/lib/utils';
 import { IBook, Messages } from '@/components/types';
 import { startVoiceSession, endVoiceSession } from '@/lib/actions/sessions.actions';
+import { useSubscription } from '@/hooks/useSubscription';
 
 export function useLatestRef<T>(value: T) {
     const ref = useRef(value);
@@ -23,6 +25,7 @@ const VAPI_API_KEY = process.env.NEXT_PUBLIC_VAPI_API_KEY;
 const TIMER_INTERVAL_MS = 1000;
 const SECONDS_PER_MINUTE = 60;
 const TIME_WARNING_THRESHOLD = 60; // Show warning when this many seconds remain
+const LIMIT_REDIRECT_DELAY_MS = 3000; // Time to let the user read the limit message before redirecting
 
 let vapi: InstanceType<typeof Vapi>;
 function getVapi() {
@@ -39,7 +42,8 @@ export type CallStatus = 'idle' | 'connecting' | 'starting' | 'listening' | 'thi
 
 export function useVapi(book: IBook) {
     const { userId } = useAuth();
-    // const { limits } = useSubscription();
+    const { limits } = useSubscription();
+    const router = useRouter();
 
     const [status, setStatus] = useState<CallStatus>('idle');
     const [messages, setMessages] = useState<Messages[]>([]);
@@ -49,12 +53,13 @@ export function useVapi(book: IBook) {
     const [limitError, setLimitError] = useState<string | null>(null);
 
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
     const startTimeRef = useRef<number | null>(null);
     const sessionIdRef = useRef<string | null>(null);
     const isStoppingRef = useRef(false);
 
     // Keep refs in sync with latest values for use in callbacks
-    // const maxDurationRef = useLatestRef(limits.maxSessionMinutes * 60);
+    const maxDurationRef = useLatestRef(limits.maxSessionMinutes * SECONDS_PER_MINUTE);
     const durationRef = useLatestRef(duration);
     const voice = book.persona || DEFAULT_VOICE;
 
@@ -67,6 +72,12 @@ export function useVapi(book: IBook) {
                 setCurrentMessage('');
                 setCurrentUserMessage('');
 
+                // A previous session may have queued a limit redirect; cancel it now that a new session has started
+                if (redirectTimerRef.current) {
+                    clearTimeout(redirectTimerRef.current);
+                    redirectTimerRef.current = null;
+                }
+
                 // Start duration timer
                 startTimeRef.current = Date.now();
                 setDuration(0);
@@ -76,14 +87,18 @@ export function useVapi(book: IBook) {
                         setDuration(newDuration);
 
                         // Check duration limit
-                        // if (newDuration >= maxDurationRef.current) {
-                        //     getVapi().stop();
-                        //     setLimitError(
-                        //         `Session time limit (${Math.floor(
-                        //             maxDurationRef.current / SECONDS_PER_MINUTE,
-                        //         )} minutes) reached. Upgrade your plan for longer sessions.`,
-                        //     );
-                        // }
+                        if (newDuration >= maxDurationRef.current) {
+                            isStoppingRef.current = true;
+                            getVapi().stop();
+                            setLimitError(
+                                `Session time limit (${Math.floor(
+                                    maxDurationRef.current / SECONDS_PER_MINUTE,
+                                )} minutes) reached. Upgrade your plan for longer sessions. Redirecting to home…`,
+                            );
+                            redirectTimerRef.current = setTimeout(() => {
+                                router.push('/');
+                            }, LIMIT_REDIRECT_DELAY_MS);
+                        }
                     }
                 }, TIMER_INTERVAL_MS);
             },
@@ -219,6 +234,7 @@ export function useVapi(book: IBook) {
                 getVapi().removeListener(event as keyof typeof handlers, handler as () => void);
             });
             if (timerRef.current) clearInterval(timerRef.current);
+            if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
         };
     }, []);
 
@@ -242,8 +258,6 @@ export function useVapi(book: IBook) {
             }
 
             sessionIdRef.current = result.sessionId || null;
-            // Note: Server-returned maxDurationMinutes is informational only
-            // The actual limit is enforced by useLatestRef(limits.maxSessionMinutes * 60)
 
             const firstMessage = `Hey, good to meet you. Quick question before we dive in - have you actually read ${book.title} yet, or are we starting fresh?`;
 
@@ -294,10 +308,10 @@ export function useVapi(book: IBook) {
         status === 'speaking';
 
     // Calculate remaining time
-    // const maxDurationSeconds = limits.maxSessionMinutes * SECONDS_PER_MINUTE;
-    // const remainingSeconds = Math.max(0, maxDurationSeconds - duration);
-    // const showTimeWarning =
-    //     isActive && remainingSeconds <= TIME_WARNING_THRESHOLD && remainingSeconds > 0;
+    const maxDurationSeconds = limits.maxSessionMinutes * SECONDS_PER_MINUTE;
+    const remainingSeconds = Math.max(0, maxDurationSeconds - duration);
+    const showTimeWarning =
+        isActive && remainingSeconds <= TIME_WARNING_THRESHOLD && remainingSeconds > 0;
 
     return {
         status,
@@ -310,9 +324,9 @@ export function useVapi(book: IBook) {
         stop,
         limitError,
         clearError,
-        // maxDurationSeconds,
-        // remainingSeconds,
-        // showTimeWarning,
+        maxDurationSeconds,
+        remainingSeconds,
+        showTimeWarning,
     };
 }
 

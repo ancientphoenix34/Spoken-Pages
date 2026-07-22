@@ -7,6 +7,8 @@ import { escapeRegex, generateSlug, serializeData } from "../utils";
 import Book from "@/database/models/book.model";
 import BookSegment from "@/database/models/bookSegment.model";
 import { revalidatePath } from "next/cache";
+import { getUserPlanLimits } from "../subscription";
+import { BookLimitCheckResult } from "@/components/types";
 
 
 export const checkBookExists = async (title: string) => {
@@ -35,6 +37,32 @@ export const checkBookExists = async (title: string) => {
     }
 }
 
+export const checkBookLimit = async (clerkId: string): Promise<BookLimitCheckResult> => {
+    try {
+        await connectToDatabase();
+
+        const { plan, limits } = await getUserPlanLimits();
+
+        const currentCount = await Book.countDocuments({ clerkId });
+
+        return {
+            allowed: currentCount < limits.maxBooks,
+            currentCount,
+            limit: limits.maxBooks,
+            plan,
+        }
+    } catch (e) {
+        console.error("Error checking book limit", e);
+        return {
+            allowed: false,
+            currentCount: 0,
+            limit: 0,
+            plan: "free",
+            error: "Failed to verify book limit. Please try again later.",
+        }
+    }
+}
+
 export const createBook = async (data: CreateBook) => {
     try {
         await connectToDatabase();
@@ -52,6 +80,16 @@ export const createBook = async (data: CreateBook) => {
         }
 
         // Check subscription limits
+        const limitCheck = await checkBookLimit(data.clerkId);
+        if (!limitCheck.allowed) {
+            return {
+                success: false,
+                limitReached: true,
+                error: limitCheck.error
+                    || `You've reached your ${limitCheck.plan} plan limit of ${limitCheck.limit} book${limitCheck.limit === 1 ? '' : 's'}. Upgrade your plan to add more.`,
+            }
+        }
+
         const book = await Book.create({ ...data, slug, totalSegments: 0 })
         
         revalidatePath('/');
