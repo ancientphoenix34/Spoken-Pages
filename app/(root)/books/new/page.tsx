@@ -1,7 +1,10 @@
+import { auth } from '@clerk/nextjs/server'
 import UploadForm from '@/components/UploadForm'
 import React from 'react'
 
-const page = () => {
+const page = async () => {
+  await auth.protect()
+
   return (
     <main className='wrapper container'>
         <div className='mx-auto max-w-180 space-y-10'>
