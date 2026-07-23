@@ -5,7 +5,7 @@ import { searchBookSegments } from '@/lib/actions/book.actions';
 // Helper function to process book search logic
 async function processBookSearch(bookId: unknown, query: unknown) {
     // Validate inputs before conversion to prevent null/undefined becoming "null"/"undefined" strings
-    if (bookId == null || query == null || query === '') {
+    if (bookId === null || bookId === undefined || query === null || query === undefined || query === '') {
         return { result: 'Missing bookId or query' };
     }
 
@@ -76,20 +76,18 @@ export async function POST(request: Request) {
             });
         }
 
-        const results = [];
-
-        for (const toolCall of toolCallList) {
+        const results = await Promise.all(toolCallList.map(async (toolCall: { id: string; function?: { name?: string; arguments?: unknown } }) => {
             const { id, function: func } = toolCall;
             const name = func?.name;
             const args = parseArgs(func?.arguments);
 
             if (name === 'searchBook') {
                 const searchResult = await processBookSearch(args.bookId, args.query);
-                results.push({ toolCallId: id, ...searchResult });
-            } else {
-                results.push({ toolCallId: id, result: `Unknown function: ${name}` });
+                return { toolCallId: id, ...searchResult };
             }
-        }
+
+            return { toolCallId: id, result: `Unknown function: ${name}` };
+        }));
 
         return NextResponse.json({ results });
     } catch (error) {

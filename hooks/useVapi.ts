@@ -38,6 +38,13 @@ function getVapi() {
     return vapi;
 }
 
+// Fire-and-forget session cleanup; errors are logged, not propagated to the caller
+function endVoiceSessionSafely(sessionId: string, duration: number, context: string) {
+    endVoiceSession(sessionId, duration).catch((err) =>
+        console.error(`Failed to end voice session ${context}:`, err),
+    );
+}
+
 export type CallStatus = 'idle' | 'connecting' | 'starting' | 'listening' | 'thinking' | 'speaking';
 
 export function useVapi(book: IBook) {
@@ -195,9 +202,7 @@ export function useVapi(book: IBook) {
 
                 // End session tracking on error
                 if (sessionIdRef.current) {
-                    endVoiceSession(sessionIdRef.current, durationRef.current).catch((err) =>
-                        console.error('Failed to end voice session on error:', err),
-                    );
+                    endVoiceSessionSafely(sessionIdRef.current, durationRef.current, 'on error');
                     sessionIdRef.current = null;
                 }
 
