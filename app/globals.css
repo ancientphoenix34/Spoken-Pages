@@ -759,21 +759,6 @@
   box-shadow: var(--shadow-soft-md) !important;
 }
 
-.cl-pricingTableCardDescription {
-  margin-top: 12px !important;
-}
-
-/* Subscription Plan Cards - maintain consistent height */
-.cl-pricingTableCard {
-  min-height: 420px !important;
-  display: flex !important;
-  flex-direction: column !important;
-}
-
-.cl-pricingTableCardContent {
-  flex: 1 !important;
-}
-
 /* Clerk Auth Input Fields with Soft Shadow */
 .cl-formFieldInput__identifier,
 .cl-formFieldInput__password,
@@ -839,6 +824,82 @@
   border-radius: 1rem !important;
   background-color: white !important;
   box-shadow: var(--shadow-soft-md) !important;
+}
+
+/*
+ * Card layout: title/description/price render first (cl-pricingTableCard's
+ * own children, Header then Body - already in that order in the DOM).
+ * Inside cl-pricingTableCardBody, the CTA button (cl-pricingTableCardFooter)
+ * and the feature list (cl-pricingTableCardFeatures) are SIBLINGS, with the
+ * button rendered after the list. Flex `order` swaps them so the button
+ * shows right under the price and the list follows below a divider.
+ * (cl-pricingTableCardFeatures matches both an outer wrapper and a nested
+ * inner grid with the same class name - only the outer one carries
+ * data-variant, so that attribute is used to target it specifically.)
+ */
+.cl-pricingTableCard {
+  min-height: 420px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 1.75rem !important;
+}
+
+.cl-pricingTableCardBody {
+  display: flex !important;
+  flex-direction: column !important;
+  margin-top: 1.5rem !important;
+}
+
+.cl-pricingTableCardFooter,
+.cl-pricingTableCardStatusRow {
+  order: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.5rem !important;
+}
+
+.cl-pricingTableCardFeatures[data-variant] {
+  order: 2 !important;
+  margin-top: 1.5rem !important;
+  padding-top: 1.5rem !important;
+  border-top: 1px solid var(--border-subtle) !important;
+}
+
+.cl-pricingTableCardDescription {
+  margin-top: 12px !important;
+}
+
+.cl-pricingTableCardFeeContainer {
+  display: flex !important;
+  align-items: baseline !important;
+  flex-wrap: wrap !important;
+  gap: 0.4rem !important;
+  margin-top: 1.25rem !important;
+}
+
+.cl-pricingTableCardFee {
+  font-size: 2.25rem !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+}
+
+.cl-pricingTableCardFeePeriod,
+.cl-pricingTableCardFeePeriodNotice {
+  font-size: 0.8rem !important;
+  color: var(--text-secondary) !important;
+}
+
+.cl-pricingTableCardFooterNotice {
+  text-align: center !important;
+  font-size: 0.8rem !important;
+  color: var(--text-secondary) !important;
+}
+
+.cl-pricingTableCardFeaturesListItem {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 0.5rem !important;
 }
 
 /* Subscription panel appear above pricing cards */
@@ -950,20 +1011,19 @@ button[data-variant='unstyled'] *,
   border-radius: 9999px !important;
 }
 
-/* Add "Current Plan" indicator to active plan that doesn't have a button
-   Note: Hardcoded English text - if i18n support is needed, this should be
-   handled in JavaScript with translated strings rendered in the DOM. */
-.cl-pricingTableCard:first-child .cl-pricingTableCardContent::after {
-  content: 'Your Current Plan';
-  display: block;
-  text-align: center;
-  padding: 0.75rem 1.5rem;
-  margin-top: 1rem;
+/* Style Clerk's own "current plan" status row (rendered in place of the
+   CTA button when a card represents the active plan; ordering is handled
+   alongside cl-pricingTableCardFooter above). */
+.cl-pricingTableCardStatus {
+  display: block !important;
+  text-align: center !important;
+  width: 100% !important;
+  padding: 0.75rem 1.5rem !important;
   background-color: #f3e4c7 !important;
   color: #212a3b !important;
-  font-weight: 600;
-  border-radius: 0.75rem;
-  font-size: 1.125rem;
+  font-weight: 600 !important;
+  border-radius: 0.75rem !important;
+  font-size: 1rem !important;
 }
 
 .clerk-pricing-container {
