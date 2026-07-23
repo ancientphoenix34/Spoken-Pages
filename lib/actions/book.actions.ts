@@ -240,3 +240,33 @@ export const getAllBooks = async () => {
         }
     }
 }
+
+export const searchBooks = async (query: string) => {
+    try {
+        await connectToDatabase();
+
+        const trimmedQuery = query.trim();
+
+        const filter = trimmedQuery
+            ? {
+                $or: [
+                    { title: { $regex: escapeRegex(trimmedQuery), $options: 'i' } },
+                    { author: { $regex: escapeRegex(trimmedQuery), $options: 'i' } },
+                ],
+            }
+            : {};
+
+        const books = await Book.find(filter).sort({ createdAt: -1 }).lean();
+
+        return {
+            success: true,
+            data: serializeData(books)
+        }
+    } catch (e) {
+        console.error('Error searching books', e);
+        return {
+            success: false,
+            error: e
+        }
+    }
+}
