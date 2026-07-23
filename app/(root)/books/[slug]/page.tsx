@@ -6,8 +6,7 @@ import { getBookBySlug } from '@/lib/actions/book.actions'
 import VapiControls from '@/components/VapiControls'
 
 const Page = async ({ params }: { params: Promise<{ slug: string }> }) => {
-  const { userId } = await auth()
-  if (!userId) redirect('/')
+  await auth.protect()
 
   const { slug } = await params
   const result = await getBookBySlug(slug)
